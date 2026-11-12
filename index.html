@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UE-stämpelklocka</title>
+<meta name="theme-color" content="#18212b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="UE-klocka">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<style>
+/* Layout: one-column mobile tool, sticky header with plats + klocka, bottom tab bar. Signal-amber accent on slate. */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --ink:#18212b; --muted:#5d6875; --line:#d5dbe2;
+  --accent:#e8a317; --accent-ink:#1b1405;
+  --ok:#1f8a4c; --warn:#b5600b; --bad:#c23a2b; --okbg:#e3f3ea; --warnbg:#fbeedd; --badbg:#fbe6e3;
+  --display:"Barlow Condensed","Roboto Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,"Roboto Mono",monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#11161c; --surface:#1a222b; --ink:#e8edf2; --muted:#93a0ad; --line:#2c3743;
+    --accent:#f0b43a; --accent-ink:#1b1405;
+    --ok:#4cc27f; --warn:#f0a050; --bad:#f07565; --okbg:#173326; --warnbg:#3a2913; --badbg:#3d1b17;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11161c; --surface:#1a222b; --ink:#e8edf2; --muted:#93a0ad; --line:#2c3743;
+  --accent:#f0b43a; --accent-ink:#1b1405;
+  --ok:#4cc27f; --warn:#f0a050; --bad:#f07565; --okbg:#173326; --warnbg:#3a2913; --badbg:#3d1b17;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--body);-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.app{display:flex;flex-direction:column;min-height:100%;max-width:720px;margin:0 auto}
+header.top{position:sticky;top:0;z-index:5;background:var(--ink);color:var(--bg);padding:calc(10px + env(safe-area-inset-top)) 16px 12px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:end}
+:root[data-theme="dark"] header.top{background:#0a0e12;color:var(--ink)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) header.top{background:#0a0e12;color:var(--ink)}}
+.brand{font:700 22px/1 var(--display);letter-spacing:.02em;text-transform:uppercase;display:flex;gap:8px;align-items:center}
+.brand i{display:inline-block;width:10px;height:22px;background:var(--accent);border-radius:2px}
+.clock{font:500 22px/1 var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.sub{font-size:13px;opacity:.75}
+.platsbtn{grid-column:1/-1;margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px 12px;color:inherit;cursor:pointer;text-align:left}
+.platsbtn b{font:600 19px/1.1 var(--display);letter-spacing:.02em}
+.platsbtn span.c{font-size:13px;opacity:.75}
+main{flex:1;padding:16px 16px 96px;display:flex;flex-direction:column;gap:16px}
+nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs .in{display:grid;grid-template-columns:repeat(4,1fr);width:100%;max-width:720px}
+nav.tabs button{background:none;border:0;padding:10px 4px 12px;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;border-top:3px solid transparent}
+nav.tabs button svg{width:22px;height:22px}
+nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--accent)}
+h2{font:700 24px/1.1 var(--display);text-transform:uppercase;letter-spacing:.02em;margin:0;text-wrap:balance}
+h3{font:600 18px/1.2 var(--display);letter-spacing:.02em;margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile .n{font:700 32px/1 var(--display);font-variant-numeric:tabular-nums}
+.tile .l{font-size:12px;color:var(--muted)}
+.tile.hl{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
+.row{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 14px;font-weight:600;cursor:pointer;min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.dark{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn.danger{color:var(--bad);border-color:var(--bad);background:transparent}
+.btn.ghost{background:transparent}
+.btn.big{width:100%;min-height:56px;font-size:17px}
+.btn.sm{min-height:36px;padding:6px 12px;font-size:14px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.co-head{display:flex;align-items:center;gap:10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.co-head h3{flex:1;min-width:0;overflow-wrap:anywhere}
+.count{font:700 15px/1 var(--display);background:var(--ink);color:var(--bg);border-radius:20px;padding:4px 9px;font-variant-numeric:tabular-nums}
+.person{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.person:last-child{border-bottom:0}
+.person .nm{font-weight:600;overflow-wrap:anywhere}
+.person .meta{font-size:13px;color:var(--muted)}
+.dur{font:500 14px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:20px;letter-spacing:.02em;white-space:nowrap}
+.pill.warn{background:var(--warnbg);color:var(--warn)}
+.pill.bad{background:var(--badbg);color:var(--bad)}
+.pill.ok{background:var(--okbg);color:var(--ok)}
+.alert{border-left:5px solid var(--bad);background:var(--badbg)}
+.note{border-left:5px solid var(--accent)}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+input.i,select.i,textarea.i{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 12px;min-height:44px;font-size:16px;width:100%;color:var(--ink);font-weight:400}
+textarea.i{min-height:70px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:22px;padding:8px 14px;min-height:40px;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip:disabled{opacity:.45;cursor:not-allowed;text-decoration:line-through}
+.colist{display:flex;flex-direction:column;gap:6px}
+.coopt{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:12px;cursor:pointer;text-align:left;min-height:48px;font-weight:600}
+.coopt[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 5px 0 0 var(--accent)}
+.seg{display:inline-grid;grid-auto-flow:column;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:8px 14px;cursor:pointer;font-weight:600;min-height:40px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+tfoot td{font-weight:600;border-top:2px solid var(--ink)}
+.diff-pos{color:var(--bad);font-weight:600}
+.diff-ok{color:var(--ok);font-weight:600}
+.empty{padding:22px 14px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px}
+details.card>summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between}
+details.card>summary::-webkit-details-marker{display:none}
+.sheet-bg{position:fixed;inset:0;background:rgba(8,12,16,.55);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:720px;max-height:90%;overflow:auto;border-radius:14px 14px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px}
+.sheet .bar{width:40px;height:4px;border-radius:2px;background:var(--line);align-self:center}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:30;background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 12px 10px 16px;display:flex;gap:12px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.toast button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer}
+.banner{background:var(--warnbg);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:14px}
+.log{font-size:13px;display:flex;flex-direction:column;gap:6px}
+.log div{border-left:3px solid var(--line);padding-left:8px}
+.hidden{display:none !important}
+@media (max-width:400px){.grid2{grid-template-columns:1fr}.tile .n{font-size:26px}}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div>
+      <div class="brand"><i aria-hidden="true"></i>UE-stämpelklocka</div>
+      <div class="sub" id="dateLabel"></div>
+    </div>
+    <div class="clock" id="clock">--:--</div>
+    <button class="platsbtn" id="platsBtn" type="button">
+      <span><span class="c">Arbetsplats</span><br><b id="platsName">Välj plats</b></span>
+      <span class="c">Byt ▾</span>
+    </button>
+  </header>
+
+  <main id="main">
+    <div class="banner hidden" id="statusBanner"></div>
+    <section id="view-plats"></section>
+    <section id="view-in" class="hidden"></section>
+    <section id="view-rapport" class="hidden"></section>
+    <section id="view-inst" class="hidden"></section>
+  </main>
+</div>
+
+<nav class="tabs" aria-label="Vyer"><div class="in">
+  <button type="button" data-tab="plats" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3 3 0 010 6M21 20c0-2.6-1.6-4.8-4-5.6"/></svg>På plats</button>
+  <button type="button" data-tab="in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Stämpla in</button>
+  <button type="button" data-tab="rapport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Rapport</button>
+  <button type="button" data-tab="inst"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="var(--surface)"/><circle cx="15" cy="12" r="2" fill="var(--surface)"/><circle cx="7" cy="18" r="2" fill="var(--surface)"/></svg>Inställningar</button>
+</div></nav>
+
+<div id="sheetRoot"></div>
+<div id="toastRoot"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2,"0");
+const dateKey = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const hm = iso => { if(!iso) return "–"; const d=new Date(iso); return pad(d.getHours())+":"+pad(d.getMinutes()); };
+const dShort = iso => { const d=new Date(iso); return d.getDate()+"/"+(d.getMonth()+1); };
+const mins = (a,b) => Math.max(0, Math.round((new Date(b)-new Date(a))/60000));
+const fmtDur = m => Math.floor(m/60)+" h "+pad(m%60)+" min";
+const fmtH = m => (m/60).toLocaleString("sv-SE",{minimumFractionDigits:2,maximumFractionDigits:2});
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const slug = s => (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40) || uid();
+const WD = ["sön","mån","tis","ons","tor","fre","lör"];
+const MO = ["jan","feb","mar","apr","maj","jun","jul","aug","sep","okt","nov","dec"];
+const store = { get(k,d){ try{ const v=localStorage.getItem("uestampel:"+k); return v==null?d:JSON.parse(v);}catch(e){return d;} }, set(k,v){ try{localStorage.setItem("uestampel:"+k,JSON.stringify(v));}catch(e){} } };
+
+/* ---------- lokal databas (telefonens lagring) ---------- */
+const LDB=(function(){
+  const KEY="uestampel:data:v1";
+  let data={}; try{ data=JSON.parse(localStorage.getItem(KEY)||"{}")||{}; }catch(e){ data={}; }
+  const listeners=new Set();
+  const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){ throw {code:"quota_exceeded", message:"Telefonens lagring är full. Skicka rapport och ta säkerhetskopia."}; } store.set("senastSparad", new Date().toISOString()); listeners.forEach(l=>{ try{l();}catch(e){console.error(e);} }); }
+  function split(path){ const p=path.split("/"); return [p.slice(0,-1).join("/"), p[p.length-1]]; }
+  function merge(t,s){ for(const k in s){ const v=s[k]; if(v&&typeof v==="object"&&!Array.isArray(v)&&t[k]&&typeof t[k]==="object"&&!Array.isArray(t[k])) merge(t[k],v); else t[k]=clone(v); } return t; }
+  function snap(id,obj){ return {id, exists:!!obj, data:()=>obj?clone(obj):undefined, metadata:{fromCache:false,hasPendingWrites:false}}; }
+  function doc(path){ const [c,id]=split(path); return { id, path,
+    async get(){ return snap(id,(data[c]||{})[id]); },
+    async set(o){ (data[c]=data[c]||{})[id]=clone(o); save(); },
+    async update(o){ const cur=(data[c]||{})[id]; if(!cur) throw {code:"invalid_argument",message:"Dokumentet saknas"}; merge(cur,o); save(); },
+    async delete(){ if(data[c]) delete data[c][id]; save(); },
+    async acquire(){ return {acquired:true}; } }; }
+  function query(c, filters){
+    const run=()=>{ const docs=Object.entries(data[c]||{}).filter(([,o])=>filters.every(([f,op,v])=>{ const x=o[f]; return op==="=="?x===v:op===">="?x>=v:op==="<="?x<=v:op===">"?x>v:op==="<"?x<v:true; })).sort((a,b)=>a[0]<b[0]?-1:1).map(([id,o])=>snap(id,o)); return {docs,size:docs.length,empty:!docs.length,docChanges:()=>[],metadata:{fromCache:false,hasPendingWrites:false}}; };
+    return { where(f,op,v){ return query(c, filters.concat([[f,op,v]])); }, async get(){ return run(); },
+      onSnapshot(next){ const l=()=>next(run()); listeners.add(l); setTimeout(l,0); return ()=>listeners.delete(l); } };
+  }
+  return { doc, collection:c=>Object.assign(query(c,[]),{path:c, doc:id=>doc(c+"/"+(id||uid()))}),
+    exportAll:()=>clone(data), importAll(o){ data=clone(o)||{}; save(); }, size:()=>JSON.stringify(data).length };
+})();
+function downloadBlob(content, filename, type){
+  const blob=content instanceof Blob?content:new Blob([content],{type:type||"text/plain;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },2000);
+}
+
+/* ---------- state ---------- */
+const S = {
+  db:null, user:null, me:null, canWrite:true, downloads:null,
+  platser:{}, foretag:{}, dagar:{},           // live data
+  platsId: store.get("plats", null),
+  tab:"plats",
+  inForm:{ foretagId:null, antal:1, annanTid:false, tid:"", orsak:"" },
+  rapport:{ from:null, to:null, plats:"alla", foretag:"alla", rows:null, loading:false, fakt:{} },
+  names:{}, loaded:{platser:false,foretag:false,dagar:false}
+};
+
+/* ---------- clock ---------- */
+function tick(){
+  const n=new Date();
+  $("#clock").textContent = pad(n.getHours())+":"+pad(n.getMinutes());
+  $("#dateLabel").textContent = WD[n.getDay()]+" "+n.getDate()+" "+MO[n.getMonth()]+" "+n.getFullYear();
+  document.querySelectorAll("[data-since]").forEach(el=>{ el.textContent = fmtDur(mins(el.dataset.since, n)); });
+}
+tick(); setInterval(tick, 20000);
+
+/* ---------- banner / toast ---------- */
+function banner(msg){ const b=$("#statusBanner"); if(!msg){b.classList.add("hidden");return;} b.textContent=msg; b.classList.remove("hidden"); }
+let toastTimer=null;
+function toast(msg, undo){
+  const r=$("#toastRoot"); clearTimeout(toastTimer);
+  r.innerHTML = '<div class="toast" role="status"><span>'+esc(msg)+'</span>'+(undo?'<button type="button" id="undoBtn">Ångra</button>':'')+'</div>';
+  if(undo) $("#undoBtn").onclick = ()=>{ r.innerHTML=""; undo(); };
+  toastTimer = setTimeout(()=>{ r.innerHTML=""; }, undo?10000:3500);
+}
+
+/* ---------- sheet ---------- */
+function openSheet(html, bind){
+  const root=$("#sheetRoot");
+  root.innerHTML = '<div class="sheet-bg" id="sheetBg"><div class="sheet" role="dialog" aria-modal="true"><div class="bar"></div>'+html+'</div></div>';
+  $("#sheetBg").addEventListener("click", e=>{ if(e.target.id==="sheetBg") closeSheet(); });
+  root.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheet);
+  if(bind) bind(root);
+  const f=root.querySelector("input,select,textarea,button:not([data-close])"); if(f) setTimeout(()=>f.focus(),50);
+}
+function closeSheet(){ $("#sheetRoot").innerHTML=""; }
+
+/* ---------- data access ---------- */
+const dayId = (datum, platsId) => datum+"_"+platsId;
+function allEntries(){
+  const out=[];
+  for(const [id,d] of Object.entries(S.dagar)){
+    const p=d.poster||{};
+    for(const e of Object.values(p)) out.push(Object.assign({_day:id, _datum:d.datum, _plats:d.plats, _platsNamn:d.platsNamn}, e));
+  }
+  return out;
+}
+function logLine(typ, text){ return { [uid()]: { t:new Date().toISOString(), av:S.me, typ, text } }; }
+
+async function ensureDay(datum, platsId){
+  const ref=S.db.doc("dagar/"+dayId(datum,platsId));
+  let snap=await ref.get();
+  if(snap.exists) return ref;
+  try{ await ref.acquire({holder:S.me||uid(), ttlMs:5000}); }catch(e){}
+  snap=await ref.get();
+  if(!snap.exists){
+    const pl=S.platser[platsId];
+    await ref.set({ datum, plats:platsId, platsNamn: pl?pl.namn:platsId, poster:{} });
+  }
+  return ref;
+}
+async function writeErr(e){
+  console.error(e);
+  if(e && e.code==="quota_exceeded") toast(e.message);
+  else toast("Kunde inte spara: "+((e&&e.message)||"okänt fel"));
+}
+
+/* ---------- actions ---------- */
+async function stamplaIn(){
+  const f=S.inForm, co=S.foretag[f.foretagId];
+  if(!S.platsId || !co) return;
+  const antal=Math.max(0, Math.min(200, parseInt(f.antal,10)||0));
+  if(!antal){ toast("Ange antal personer."); return; }
+  const now=new Date();
+  let tid=now;
+  if(f.annanTid){
+    if(!f.tid || !f.orsak.trim()){ toast("Ange tid och orsak för manuell tid."); return; }
+    const [h,m]=f.tid.split(":").map(Number); tid=new Date(now); tid.setHours(h,m,0,0);
+    if(tid>now){ toast("Tiden kan inte ligga i framtiden."); return; }
+  }
+  const datum=dateKey(tid), grupp=uid();
+  try{
+    const ref=await ensureDay(datum, S.platsId);
+    const poster={};
+    for(let i=0;i<antal;i++){
+      const id=uid()+i;
+      poster[id]={ id, grupp, foretagId:f.foretagId, foretagNamn:co.namn, personId:id, namn:"", id06:"",
+        in:tid.toISOString(), inReg:now.toISOString(), inAv:S.me, inManuell:!!f.annanTid, inOrsak:f.annanTid?f.orsak.trim():"",
+        ut:null, utReg:null, utAv:null, utManuell:false, utOrsak:"", utNotering:"", tidig:false, borttagen:false,
+        logg: logLine("in", "Instämplad "+hm(tid.toISOString())+" i grupp om "+antal+(f.annanTid?" (manuell tid, registrerad "+hm(now.toISOString())+": "+f.orsak.trim()+")":"")) };
+    }
+    await ref.update({poster});
+    toast(antal+" från "+co.namn+" instämplade "+hm(tid.toISOString()));
+    S.inForm={ foretagId:f.foretagId, antal:"", annanTid:false, tid:"", orsak:"" };
+    setTab("plats");
+  }catch(e){ writeErr(e); }
+}
+
+async function stamplaUt(entries, opts){
+  opts=opts||{};
+  const now=new Date(); const tid=opts.tid||now;
+  const byDay={};
+  for(const e of entries){
+    if(new Date(e.in)>tid){ toast("Ut-tid före in-tid för "+e.namn+"."); return; }
+    const not=(opts.notering||"").trim();
+    (byDay[e._day]=byDay[e._day]||{})[e.id]={ ut:tid.toISOString(), utReg:now.toISOString(), utAv:S.me, utManuell:!!opts.manuell, utOrsak:opts.orsak||"", utNotering:not, tidig:!!opts.tidig, ...(e._nyttNamn?{namn:e._nyttNamn}:{}),
+      logg: logLine("ut","Utstämplad "+hm(tid.toISOString())+(opts.manuell?" (manuell tid, registrerad "+hm(now.toISOString())+": "+opts.orsak+")":"")+(not&&not!==opts.orsak?" · Notering: "+not:"")) };
+  }
+  try{
+    for(const [day,poster] of Object.entries(byDay)) await S.db.doc("dagar/"+day).update({poster});
+    const label = entries.length===1 ? (entries[0]._nyttNamn||entries[0].namn||"1 person") : entries.length+" personer";
+    toast(label+" utstämplad "+hm(tid.toISOString()), opts.manuell?null:async ()=>{
+      try{
+        for(const [day,poster] of Object.entries(byDay)){
+          const undo={}; for(const id of Object.keys(poster)) undo[id]={ut:null,utReg:null,utAv:null,utManuell:false,utOrsak:"",utNotering:"",tidig:false,logg:logLine("ångra","Utstämpling ångrad")};
+          await S.db.doc("dagar/"+day).update({poster:undo});
+        }
+      }catch(e){ writeErr(e); }
+    });
+  }catch(e){ writeErr(e); }
+}
+
+/* ---------- views ---------- */
+function setTab(t){
+  S.tab=t;
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current", b.dataset.tab===t?"page":"false"));
+  ["plats","in","rapport","inst"].forEach(v=>$("#view-"+v).classList.toggle("hidden", v!==t));
+  render(); window.scrollTo(0,0);
+}
+document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+$("#platsBtn").onclick=pickPlats;
+
+function render(){
+  const pl=S.platser[S.platsId];
+  $("#platsName").textContent = pl ? pl.namn : "Välj plats";
+  if(S.tab==="plats") renderPlats();
+  if(S.tab==="in") renderIn();
+  if(S.tab==="rapport") renderRapport();
+  if(S.tab==="inst") renderInst();
+  resolveNames();
+}
+
+function loadingOr(html){
+  const l=S.loaded; if(!S.db) return '<div class="empty">Startar…</div>';
+  if(!l.platser||!l.foretag||!l.dagar) return '<div class="empty">Läser in…</div>';
+  return html;
+}
+
+function renderPlats(){
+  const v=$("#view-plats");
+  if(!S.loaded.platser){ v.innerHTML=loadingOr(""); return; }
+  if(!Object.keys(S.platser).length){
+    v.innerHTML='<div class="card note"><h2>Kom igång</h2><p class="muted" style="margin:0">Lägg först upp arbetsplatsen (station eller etapp) där du stämplar in UE.</p><button class="btn primary big" type="button" id="goInst">Lägg upp arbetsplats</button></div>';
+    $("#goInst").onclick=()=>setTab("inst"); return;
+  }
+  if(!S.platsId || !S.platser[S.platsId]){ v.innerHTML='<div class="card note"><h3>Välj arbetsplats</h3><p class="muted small" style="margin:0">Telefonen kommer ihåg ditt val.</p><button class="btn primary big" type="button" id="pp">Välj plats</button></div>'; $("#pp").onclick=pickPlats; return; }
+  const today=dateKey(new Date());
+  const all=allEntries().filter(e=>!e.borttagen && e._plats===S.platsId);
+  const inne=all.filter(e=>!e.ut && e._datum===today);
+  const glomda=all.filter(e=>!e.ut && e._datum<today);
+  const utIdag=all.filter(e=>e.ut && e._datum===today);
+  const groups={}; inne.forEach(e=>(groups[e.foretagId]=groups[e.foretagId]||[]).push(e));
+  const nCo=Object.keys(groups).length;
+  const mIdag = all.filter(e=>e._datum===today).reduce((s,e)=>s+mins(e.in, e.ut||new Date()),0);
+
+  let h='<div class="tiles"><div class="tile hl"><div class="n">'+inne.length+'</div><div class="l">på plats nu</div></div><div class="tile"><div class="n">'+nCo+'</div><div class="l">UE-företag</div></div><div class="tile"><div class="n">'+fmtH(mIdag).replace(/,00$/,"")+'</div><div class="l">mantimmar idag</div></div></div>';
+  if(glomda.length){
+    const gg={}; glomda.forEach(e=>{ const k=e._day+"|"+e.foretagId+"|"+e.in; (gg[k]=gg[k]||[]).push(e); });
+    h+='<div class="card alert"><h3>Ej utstämplade från tidigare dagar</h3><p class="small" style="margin:0">Ange faktisk ut-tid med orsak. Annars räknas inga timmar på passet.</p>';
+    Object.entries(gg).sort((a,b)=>a[1][0].in<b[1][0].in?-1:1).forEach(([k,l])=>{ h+='<div class="person"><div class="grow"><div class="nm">'+esc(l[0].foretagNamn)+' · '+l.length+' st</div><div class="meta">In '+dShort(l[0].in)+' '+hm(l[0].in)+'</div></div><button class="btn sm danger" type="button" data-fix="'+esc(k)+'">Ange ut-tid</button></div>'; });
+    h+='</div>';
+    S._glomda=gg;
+  }
+  h+='<div class="row"><h2 class="grow">På plats nu</h2><button class="btn primary sm" type="button" id="toIn">+ Stämpla in</button></div>';
+  if(!inne.length) h+='<div class="empty">Ingen UE instämplad på '+esc(S.platser[S.platsId].namn)+' just nu.</div>';
+  Object.entries(groups).sort((a,b)=>(a[1][0].foretagNamn||"").localeCompare(b[1][0].foretagNamn||"","sv")).forEach(([fid,list])=>{
+    const byIn={}; list.forEach(e=>(byIn[e.in]=byIn[e.in]||[]).push(e));
+    h+='<div class="card"><div class="co-head"><h3>'+esc(list[0].foretagNamn)+'</h3><span class="count">'+list.length+' st</span></div>';
+    Object.keys(byIn).sort().forEach(t=>{ const l=byIn[t], man=l.some(e=>e.inManuell);
+      h+='<div class="person"><div class="grow"><div class="nm">'+l.length+' st in <span class="mono">'+hm(t)+'</span>'+(man?' <span class="pill warn">manuell in-tid</span>':'')+'</div><div class="meta"><span data-name="'+esc(l[0].inAv||"")+'"></span></div></div><span class="dur" data-since="'+esc(t)+'">'+fmtDur(mins(t,new Date()))+'</span></div>'; });
+    h+='<div class="grid2"><button class="btn" type="button" data-tidig="'+esc(fid)+'">Någon går tidigare</button><button class="btn dark" type="button" data-utall="'+esc(fid)+'">Alla ut</button></div><button class="btn sm ghost" type="button" data-just="'+esc(fid)+'">Justera antal / in-tid</button></div>';
+  });
+  if(utIdag.length){
+    const ug={}; utIdag.forEach(e=>{ const k=e.foretagId+"|"+e.in+"|"+e.ut+"|"+(e.namn||"")+"|"+(e.utNotering||""); (ug[k]=ug[k]||[]).push(e); });
+    h+='<details class="card"><summary><span>Utstämplade idag ('+utIdag.length+')</span><span class="muted">visa</span></summary>';
+    Object.values(ug).sort((a,b)=>a[0].ut<b[0].ut?1:-1).forEach(l=>{ const e=l[0];
+      const flag=(e.inManuell||e.utManuell)?' <span class="pill warn">manuell</span>':'';
+      const tidig=e.tidig?' <span class="pill warn">gick tidigare</span>':'';
+      const vem=e.namn?esc(e.namn):(l.length+' st');
+      h+='<div class="person"><div class="grow"><div class="nm">'+vem+tidig+flag+'</div><div class="meta">'+esc(e.foretagNamn)+' · <span class="mono">'+hm(e.in)+'–'+hm(e.ut)+'</span>'+(e.utNotering?' · '+esc(e.utNotering):'')+'</div></div><span class="dur">'+fmtH(mins(e.in,e.ut)*l.length)+' h</span>'+(l.length===1?'<button class="btn sm" type="button" data-edit="'+esc(e._day+"|"+e.id)+'">Ändra</button>':'')+'</div>';
+    });
+    h+='</details>';
+  }
+  v.innerHTML=loadingOr(h);
+  const find=k=>{ const [d,id]=k.split("|"); const dd=S.dagar[d]; const e=dd&&dd.poster&&dd.poster[id]; return e?Object.assign({_day:d,_datum:dd.datum,_plats:dd.plats},e):null; };
+  const tIn=$("#toIn"); if(tIn) tIn.onclick=()=>setTab("in");
+  v.querySelectorAll("[data-tidig]").forEach(b=>b.onclick=()=>{ if(!guard())return; leaveSheet(groups[b.dataset.tidig], false); });
+  v.querySelectorAll("[data-utall]").forEach(b=>b.onclick=()=>{ if(!guard())return; leaveSheet(groups[b.dataset.utall], true); });
+  v.querySelectorAll("[data-just]").forEach(b=>b.onclick=()=>{ if(!guard())return; adjustSheet(groups[b.dataset.just]); });
+  v.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{ const e=find(b.dataset.edit); if(e) editSheet(e); });
+  v.querySelectorAll("[data-fix]").forEach(b=>b.onclick=()=>{ if(!guard())return; const l=S._glomda[b.dataset.fix]; if(l) fixSheet(l); });
+}
+function guard(){ if(!S.me){ toast("Ange ditt namn under Inställningar först."); setTab("inst"); return false; } return true; }
+
+function stepper(id, val, max){
+  return '<div class="row"><button class="btn" type="button" data-step="'+id+'" data-d="-1" aria-label="Minska">−</button><input class="i mono" style="width:90px;text-align:center;font-size:22px;font-weight:600" id="'+id+'" type="number" inputmode="numeric" min="1"'+(max?' max="'+max+'"':'')+' value="'+val+'"><button class="btn" type="button" data-step="'+id+'" data-d="1" aria-label="Öka">+</button>'+(max?'<span class="muted small">av '+max+' på plats</span>':'')+'</div>';
+}
+function bindStepper(r, id, max, onchange){
+  const inp=r.querySelector("#"+id);
+  const clamp=()=>{ let n=parseInt(inp.value,10)||1; n=Math.max(1, max?Math.min(max,n):n); inp.value=n; if(onchange) onchange(n); };
+  r.querySelectorAll('[data-step="'+id+'"]').forEach(b=>b.onclick=()=>{ inp.value=(parseInt(inp.value,10)||0)+Number(b.dataset.d); clamp(); });
+  inp.addEventListener("change", clamp);
+  return ()=>parseInt(inp.value,10)||0;
+}
+function leaveSheet(list, alla){
+  const co=list[0].foretagNamn, max=list.length;
+  // tidigast instämplade går först ut
+  const sorted=list.slice().sort((a,b)=>a.in<b.in?-1:1);
+  let annan=false;
+  openSheet('<h2>'+(alla?'Alla ut':'Går tidigare')+'</h2><p class="muted" style="margin:0">'+esc(co)+' · '+max+' på plats</p>'+
+    (alla?'<p style="margin:0">Alla <b>'+max+'</b> stämplas ut.</p>':'<label class="f">Hur många går?</label>'+stepper("lvN",1,max)+'<div id="lvNames" class="colist"></div>')+
+    '<div class="seg" role="group" aria-label="Tid"><button type="button" data-utm="nu" aria-pressed="true">Nu ('+hm(new Date().toISOString())+')</button><button type="button" data-utm="annan" aria-pressed="false">Annan tid</button></div>'+
+    '<div id="utTid" class="hidden">'+timeSheetFields("ut", dateKey(new Date()), "")+'</div>'+
+    '<label class="f">Notering'+(alla?' (valfritt)':'')+'<input class="i" id="utNot" placeholder="'+(alla?'T.ex. arbetet klart för dagen':'T.ex. sjuk, hämtade material, annat uppdrag')+'"></label>'+
+    '<div class="grid2"><button class="btn" type="button" data-close>Avbryt</button><button class="btn primary" type="button" id="okUt">Stämpla ut</button></div>', r=>{
+    let getN=()=>max;
+    const drawNames=n=>{
+      const box=r.querySelector("#lvNames"); if(!box) return;
+      const prev=[...box.querySelectorAll("input")].map(i=>i.value);
+      let hh='<span class="small muted">Namn (valfritt, för att stämma av mot Next)</span>';
+      for(let i=0;i<n;i++) hh+='<input class="i" data-nm="'+i+'" placeholder="Namn person '+(i+1)+'" value="'+esc(prev[i]||"")+'" autocomplete="off">';
+      box.innerHTML=hh;
+      r.querySelector("#okUt").textContent="Stämpla ut "+n+(max-n?" ("+(max-n)+" stannar)":"");
+    };
+    if(!alla){ getN=bindStepper(r,"lvN",max,drawNames); drawNames(1); } else r.querySelector("#okUt").textContent="Stämpla ut alla "+max;
+    r.querySelectorAll("[data-utm]").forEach(b=>b.onclick=()=>{ annan=b.dataset.utm==="annan"; r.querySelectorAll("[data-utm]").forEach(x=>x.setAttribute("aria-pressed", String((x.dataset.utm==="annan")===annan))); r.querySelector("#utTid").classList.toggle("hidden",!annan); });
+    r.querySelector("#okUt").onclick=()=>{
+      const n=alla?max:Math.max(1,Math.min(max,getN()));
+      const not=r.querySelector("#utNot").value.trim();
+      if(!alla && !not){ toast("Skriv en kort notering om varför de går tidigare."); r.querySelector("#utNot").focus(); return; }
+      const namn=[...r.querySelectorAll("[data-nm]")].map(i=>i.value.trim());
+      const valda=sorted.slice(0,n).map((e,i)=>Object.assign({},e,{_nyttNamn:namn[i]||""}));
+      let opts={notering:not, tidig:!alla};
+      if(annan){ const v=readTime(r,"ut"); if(!v) return; opts=Object.assign(opts,{tid:v.dt, manuell:true, orsak:v.orsak}); }
+      closeSheet(); stamplaUt(valda, opts);
+    };
+  });
+}
+function adjustSheet(list){
+  const co=list[0].foretagNamn, max=list.length;
+  const sorted=list.slice().sort((a,b)=>a.in<b.in?1:-1); // senast instämplade tas bort först
+  let mode="minska";
+  openSheet('<h2>Justera</h2><p class="muted" style="margin:0">'+esc(co)+' · '+max+' på plats</p>'+
+    '<div class="seg" role="group"><button type="button" data-am="minska" aria-pressed="true">För många inräknade</button><button type="button" data-am="intid" aria-pressed="false">Ändra in-tid</button></div><div id="adBody"></div><button class="btn ghost" type="button" data-close>Stäng</button>', r=>{
+    const body=r.querySelector("#adBody");
+    const draw=()=>{
+      r.querySelectorAll("[data-am]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.am===mode)));
+      if(mode==="minska"){
+        body.innerHTML='<div class="card"><label class="f">Hur många ska tas bort?</label>'+stepper("adN",1,max)+'<p class="small muted" style="margin:0">Använd detta när fel antal stämplats in. Raderna döljs men finns kvar i loggen. Personer som gått hem stämplar du ut i stället.</p><label class="f">Orsak (krävs)<input class="i" id="adO" placeholder="T.ex. räknade fel vid ankomst"></label><button class="btn danger" type="button" id="adOk">Ta bort</button></div>';
+        const getN=bindStepper(body,"adN",max);
+        body.querySelector("#adOk").onclick=async ()=>{ const o=body.querySelector("#adO").value.trim(); if(!o){toast("Skriv en orsak.");return;} const n=Math.min(max,getN());
+          const byDay={}; sorted.slice(0,n).forEach(e=>(byDay[e._day]=byDay[e._day]||{})[e.id]={borttagen:true, logg:logLine("bort","Borttagen vid justering av antal: "+o)});
+          try{ for(const [d,p] of Object.entries(byDay)) await S.db.doc("dagar/"+d).update({poster:p}); closeSheet(); toast(n+" borttagna från "+co+". Loggat."); }catch(e){ writeErr(e); } };
+      } else {
+        const times=[...new Set(list.map(e=>e.in))].sort();
+        body.innerHTML='<div class="card"><label class="f">Vilken instämpling?<select class="i" id="adG">'+times.map(t=>'<option value="'+esc(t)+'">'+list.filter(e=>e.in===t).length+' st in '+hm(t)+'</option>').join("")+'</select></label>'+timeSheetFields("ai", dateKey(new Date()), hm(times[0]))+'<button class="btn primary" type="button" id="adOk">Spara in-tid</button></div>';
+        body.querySelector("#adOk").onclick=async ()=>{ const v=readTime(body,"ai"); if(!v) return; const t=body.querySelector("#adG").value; const iso=v.dt.toISOString();
+          const byDay={}; list.filter(e=>e.in===t).forEach(e=>(byDay[e._day]=byDay[e._day]||{})[e.id]={in:iso, inManuell:true, inOrsak:v.orsak, logg:logLine("ändring","In-tid ändrad "+hm(t)+" → "+hm(iso)+": "+v.orsak)});
+          try{ for(const [d,p] of Object.entries(byDay)) await S.db.doc("dagar/"+d).update({poster:p}); closeSheet(); toast("In-tiden är ändrad och loggad."); }catch(e){ writeErr(e); } };
+      }
+    };
+    r.querySelectorAll("[data-am]").forEach(b=>b.onclick=()=>{ mode=b.dataset.am; draw(); });
+    draw();
+  });
+}
+function timeSheetFields(prefix, defDate, defTime){
+  return '<div class="grid2"><label class="f">Datum<input class="i" type="date" id="'+prefix+'D" value="'+defDate+'"></label><label class="f">Tid<input class="i" type="time" id="'+prefix+'T" value="'+defTime+'"></label></div><label class="f">Orsak (krävs, sparas i loggen)<input class="i" id="'+prefix+'O" placeholder="T.ex. glömde stämpla ut, gick 15:30 enl. UE-ledare"></label>';
+}
+function readTime(r,prefix){
+  const d=r.querySelector("#"+prefix+"D").value, t=r.querySelector("#"+prefix+"T").value, o=r.querySelector("#"+prefix+"O").value.trim();
+  if(!d||!t){ toast("Ange datum och tid."); return null; } if(!o){ toast("Skriv en orsak."); return null; }
+  const [y,mo,da]=d.split("-").map(Number), [h,mi]=t.split(":").map(Number);
+  const dt=new Date(y,mo-1,da,h,mi,0,0); if(dt>new Date()){ toast("Tiden kan inte ligga i framtiden."); return null; }
+  return {dt, orsak:o};
+}
+
+function fixSheet(list){
+  const e=list[0];
+  openSheet('<h2>Ange ut-tid</h2><p style="margin:0"><b>'+esc(e.foretagNamn)+'</b>, '+list.length+' st. Instämplade '+dShort(e.in)+' kl. '+hm(e.in)+'.</p>'+timeSheetFields("fx", e._datum, "")+'<div class="grid2"><button class="btn" type="button" data-close>Avbryt</button><button class="btn primary" type="button" id="okFx">Spara ut-tid</button></div>', r=>{
+    r.querySelector("#okFx").onclick=()=>{ const v=readTime(r,"fx"); if(!v) return; closeSheet(); stamplaUt(list,{tid:v.dt, manuell:true, orsak:v.orsak, notering:v.orsak}); };
+  });
+}
+function editSheet(e){
+  const logs=Object.values(e.logg||{}).sort((a,b)=>a.t<b.t?-1:1);
+  const inD=dateKey(new Date(e.in));
+  openSheet('<h2>'+esc(e.namn||"Person")+'</h2><p class="muted" style="margin:0">'+esc(e.foretagNamn)+' · '+esc((S.platser[e._plats]||{}).namn||"")+'</p>'+
+    '<div class="card"><div class="row"><div class="grow"><div class="small muted">In</div><div class="mono">'+dShort(e.in)+' '+hm(e.in)+'</div></div><div class="grow"><div class="small muted">Ut</div><div class="mono">'+(e.ut?dShort(e.ut)+' '+hm(e.ut):'–')+'</div></div><div><div class="small muted">Tid</div><div class="mono">'+(e.ut?fmtH(mins(e.in,e.ut))+' h':'pågår')+'</div></div></div></div>'+
+    '<div class="seg" role="group" aria-label="Vad ändras"><button type="button" data-w="in" aria-pressed="true">Ändra in-tid</button><button type="button" data-w="ut" aria-pressed="false"'+(e.ut?'':' disabled')+'>Ändra ut-tid</button><button type="button" data-w="not" aria-pressed="false">Notering</button><button type="button" data-w="del" aria-pressed="false">Ta bort</button></div>'+(e.utNotering?'<p class="small" style="margin:0"><b>Notering:</b> '+esc(e.utNotering)+'</p>':'')+
+    '<div id="edBody"></div>'+
+    '<div class="card"><h3>Ändringslogg</h3><div class="log">'+(logs.map(l=>'<div><span class="mono">'+dShort(l.t)+' '+hm(l.t)+'</span> · '+esc(l.text)+' · <span data-name="'+esc(l.av||"")+'"></span></div>').join("")||'<span class="muted">Inga händelser.</span>')+'</div></div>'+
+    '<button class="btn" type="button" data-close>Stäng</button>', r=>{
+    let mode="in";
+    const body=r.querySelector("#edBody");
+    const draw=()=>{
+      r.querySelectorAll("[data-w]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.w===mode?"true":"false"));
+      if(mode==="not"){
+        body.innerHTML='<div class="card"><label class="f">Notering<input class="i" id="edN" value="'+esc(e.utNotering||"")+'" placeholder="T.ex. gick hem 13:00, sjuk"></label><button class="btn primary" type="button" id="edOk">Spara notering</button></div>';
+      } else if(mode==="del"){
+        body.innerHTML='<div class="card"><p class="small" style="margin:0">Raden döljs i listor och rapporter men finns kvar i loggen.</p><label class="f">Orsak (krävs)<input class="i" id="edO" placeholder="T.ex. felregistrerad, personen var inte på plats"></label><button class="btn danger" type="button" id="edOk">Ta bort registreringen</button></div>';
+      } else {
+        const cur = mode==="in"?e.in:e.ut;
+        body.innerHTML='<div class="card">'+timeSheetFields("ed", cur?dateKey(new Date(cur)):inD, cur?hm(cur):"")+'<button class="btn primary" type="button" id="edOk">Spara ändring</button></div>';
+      }
+      body.querySelector("#edOk").onclick=async ()=>{
+        if(!guard()) return;
+        let patch;
+        if(mode==="not"){
+          const n=body.querySelector("#edN").value.trim();
+          patch={ utNotering:n, logg:logLine("notering", n?"Notering: "+n:"Notering borttagen") };
+        } else if(mode==="del"){
+          const o=body.querySelector("#edO").value.trim(); if(!o){ toast("Skriv en orsak."); return; }
+          patch={ borttagen:true, logg:logLine("bort","Borttagen: "+o) };
+        } else {
+          const v=readTime(body,"ed"); if(!v) return;
+          const iso=v.dt.toISOString();
+          if(mode==="in" && e.ut && iso>e.ut){ toast("In-tid kan inte vara efter ut-tid."); return; }
+          if(mode==="ut" && iso<e.in){ toast("Ut-tid kan inte vara före in-tid."); return; }
+          patch = mode==="in" ? { in:iso, inManuell:true, inOrsak:v.orsak, logg:logLine("ändring","In-tid ändrad "+hm(e.in)+" → "+hm(iso)+": "+v.orsak) }
+                              : { ut:iso, utManuell:true, utOrsak:v.orsak, logg:logLine("ändring","Ut-tid ändrad "+hm(e.ut)+" → "+hm(iso)+": "+v.orsak) };
+        }
+        try{ await S.db.doc("dagar/"+e._day).update({poster:{[e.id]:patch}}); closeSheet(); toast("Ändringen är sparad och loggad."); }catch(err){ writeErr(err); }
+      };
+    };
+    r.querySelectorAll("[data-w]").forEach(b=>b.onclick=()=>{ if(b.disabled) return; mode=b.dataset.w; draw(); });
+    draw(); resolveNames();
+  });
+}
+
+function pickPlats(){
+  const list=Object.entries(S.platser).filter(([,p])=>p.aktiv!==false).sort((a,b)=>a[1].namn.localeCompare(b[1].namn,"sv"));
+  openSheet('<h2>Välj arbetsplats</h2>'+(list.length?'<div class="colist">'+list.map(([id,p])=>'<button class="coopt" type="button" data-p="'+esc(id)+'" aria-pressed="'+(id===S.platsId)+'">'+esc(p.namn)+'<span class="muted small">'+(id===S.platsId?'vald':'')+'</span></button>').join("")+'</div>':'<div class="empty">Inga arbetsplatser upplagda än.</div>')+'<button class="btn" type="button" id="toInst">Lägg upp ny arbetsplats</button><button class="btn ghost" type="button" data-close>Stäng</button>', r=>{
+    r.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{ S.platsId=b.dataset.p; store.set("plats",S.platsId); closeSheet(); render(); });
+    r.querySelector("#toInst").onclick=()=>{ closeSheet(); setTab("inst"); };
+  });
+}
+
+/* ----- Stämpla in ----- */
+function renderIn(){
+  const v=$("#view-in"), f=S.inForm;
+  if(!S.loaded.foretag||!S.loaded.platser){ v.innerHTML=loadingOr(""); return; }
+  if(!S.platsId||!S.platser[S.platsId]){ v.innerHTML='<div class="card note"><h3>Välj arbetsplats först</h3><button class="btn primary big" type="button" id="pp">Välj plats</button></div>'; $("#pp").onclick=pickPlats; return; }
+  const cos=Object.entries(S.foretag).filter(([,c])=>c.aktiv!==false).sort((a,b)=>a[1].namn.localeCompare(b[1].namn,"sv"));
+  let h='<h2>Stämpla in UE</h2><div class="card"><h3>1. Företag</h3>';
+  if(!cos.length) h+='<div class="empty">Inga UE-företag i registret.</div>';
+  else h+='<div class="colist">'+cos.map(([id,c])=>'<button class="coopt" type="button" data-co="'+esc(id)+'" aria-pressed="'+(id===f.foretagId)+'">'+esc(c.namn)+'<span class="muted small">'+(id===f.foretagId?'valt':'')+'</span></button>').join("")+'</div>';
+  h+='<button class="btn" type="button" id="newCo">+ Nytt UE-företag</button></div>';
+  const co=S.foretag[f.foretagId];
+  if(co){
+    if(!f.antal) f.antal=1;
+    h+='<div class="card"><h3>2. Antal personer</h3>'+stepper("inN",f.antal,0)+'<div class="chips">'+[2,3,4,5,6,8,10].map(n=>'<button class="chip" type="button" data-q="'+n+'" aria-pressed="'+(+f.antal===n)+'">'+n+'</button>').join("")+'</div><p class="small muted" style="margin:0">Namnen behövs inte här. De noteras bara om någon går tidigare.</p></div>';
+    h+='<div class="card"><h3>3. Tid</h3><div class="seg" role="group" aria-label="Tid"><button type="button" data-tm="nu" aria-pressed="'+(!f.annanTid)+'">Nu ('+hm(new Date().toISOString())+')</button><button type="button" data-tm="annan" aria-pressed="'+f.annanTid+'">Annan tid</button></div>';
+    if(f.annanTid) h+='<div class="grid2"><label class="f">Ankomsttid idag<input class="i" type="time" id="tmT" value="'+esc(f.tid)+'"></label><label class="f">Orsak (krävs)<input class="i" id="tmO" value="'+esc(f.orsak)+'" placeholder="T.ex. registrerar i efterhand"></label></div><p class="small muted" style="margin:0">Manuell tid markeras i rapporten. Faktisk registreringstid sparas alltid.</p>';
+    h+='</div><button class="btn primary big" type="button" id="doIn">Stämpla in '+f.antal+' från '+esc(co.namn)+'</button>';
+  }
+  v.innerHTML=h;
+  v.querySelectorAll("[data-co]").forEach(b=>b.onclick=()=>{ f.foretagId=b.dataset.co; renderIn(); });
+  $("#newCo").onclick=()=>coSheet();
+  if(co){
+    bindStepper(v,"inN",0,n=>{ f.antal=n; $("#doIn").textContent="Stämpla in "+n+" från "+co.namn; v.querySelectorAll("[data-q]").forEach(c=>c.setAttribute("aria-pressed",String(+c.dataset.q===n))); });
+    v.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ f.antal=+b.dataset.q; renderIn(); });
+    v.querySelectorAll("[data-tm]").forEach(b=>b.onclick=()=>{ f.annanTid=b.dataset.tm==="annan"; renderIn(); });
+    if(f.annanTid){ $("#tmT").oninput=e=>f.tid=e.target.value; $("#tmO").oninput=e=>f.orsak=e.target.value; }
+    $("#doIn").onclick=()=>{ f.antal=parseInt($("#inN").value,10)||f.antal; if(guard()) stamplaIn(); };
+  }
+}
+
+function coSheet(editId){
+  const c=editId?S.foretag[editId]:null;
+  openSheet('<h2>'+(c?'Ändra företag':'Nytt UE-företag')+'</h2><label class="f">Företagsnamn<input class="i" id="coN" value="'+esc(c?c.namn:"")+'" placeholder="T.ex. Svets & Montage AB"></label><label class="f">Org.nr (valfritt)<input class="i" id="coO" value="'+esc(c?c.orgnr||"":"")+'" placeholder="556xxx-xxxx"></label><div class="grid2"><button class="btn" type="button" data-close>Avbryt</button><button class="btn primary" type="button" id="coOk">Spara</button></div>', r=>{
+    r.querySelector("#coOk").onclick=async ()=>{
+      if(!guard()) return;
+      const n=r.querySelector("#coN").value.trim(), o=r.querySelector("#coO").value.trim(); if(!n){ toast("Ange företagsnamn."); return; }
+      try{
+        if(c) await S.db.doc("foretag/"+editId).update({namn:n, orgnr:o});
+        else { const id=slug(n); if(S.foretag[id]){ toast("Företaget finns redan."); return; } await S.db.doc("foretag/"+id).set({namn:n, orgnr:o, aktiv:true, personer:{}, skapad:new Date().toISOString(), skapadAv:S.me}); S.inForm.foretagId=id; S.inForm.valda={}; S.inForm.nya=[]; }
+        closeSheet(); toast("Sparat.");
+      }catch(e){ writeErr(e); }
+    };
+  });
+}
+
+/* ----- Rapport ----- */
+function monday(d){ const x=new Date(d); const wd=(x.getDay()+6)%7; x.setDate(x.getDate()-wd); return x; }
+function renderRapport(){
+  const v=$("#view-rapport"), R=S.rapport;
+  if(!R.from){ R.from=dateKey(monday(new Date())); R.to=dateKey(new Date()); }
+  const pls=Object.entries(S.platser).sort((a,b)=>a[1].namn.localeCompare(b[1].namn,"sv"));
+  const cos=Object.entries(S.foretag).sort((a,b)=>a[1].namn.localeCompare(b[1].namn,"sv"));
+  let h='<h2>Rapport</h2><div class="card"><div class="grid2"><label class="f">Från<input class="i" type="date" id="rF" value="'+R.from+'"></label><label class="f">Till<input class="i" type="date" id="rT" value="'+R.to+'"></label></div><div class="grid2"><label class="f">Arbetsplats<select class="i" id="rP"><option value="alla">Alla platser</option>'+pls.map(([id,p])=>'<option value="'+esc(id)+'"'+(R.plats===id?' selected':'')+'>'+esc(p.namn)+'</option>').join("")+'</select></label><label class="f">UE-företag<select class="i" id="rC"><option value="alla">Alla företag</option>'+cos.map(([id,c])=>'<option value="'+esc(id)+'"'+(R.foretag===id?' selected':'')+'>'+esc(c.namn)+'</option>').join("")+'</select></label></div><div class="row" style="flex-wrap:wrap"><button class="btn sm" type="button" data-q="vecka">Denna vecka</button><button class="btn sm" type="button" data-q="forra">Förra veckan</button><button class="btn sm" type="button" data-q="manad">Denna månad</button></div><button class="btn dark" type="button" id="rGo">Visa rapport</button></div>';
+  h+='<div id="rOut"></div>';
+  v.innerHTML=h;
+  const sync=()=>{ R.from=$("#rF").value; R.to=$("#rT").value; R.plats=$("#rP").value; R.foretag=$("#rC").value; };
+  ["rF","rT","rP","rC"].forEach(id=>$("#"+id).onchange=()=>{ sync(); runReport(); });
+  $("#rGo").onclick=()=>{ sync(); runReport(); };
+  v.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ const n=new Date(); let f,t;
+    if(b.dataset.q==="vecka"){ f=monday(n); t=n; } else if(b.dataset.q==="forra"){ f=monday(n); f.setDate(f.getDate()-7); t=new Date(f); t.setDate(t.getDate()+6); } else { f=new Date(n.getFullYear(),n.getMonth(),1); t=n; }
+    R.from=dateKey(f); R.to=dateKey(t); renderRapport(); runReport(); });
+  if(R.rows) drawReport(); else if(S.db) runReport();
+}
+async function runReport(){
+  const R=S.rapport; if(!S.db) return;
+  const out=$("#rOut"); if(out) out.innerHTML='<div class="empty">Hämtar…</div>';
+  try{
+    let q=S.db.collection("dagar").where("datum",">=",R.from).where("datum","<=",R.to);
+    if(R.plats!=="alla") q=q.where("plats","==",R.plats);
+    const snap=await q.get();
+    const rows=[];
+    snap.docs.forEach(d=>{ const x=d.data(); Object.values(x.poster||{}).forEach(e=>{ if(e.borttagen) return; if(R.foretag!=="alla"&&e.foretagId!==R.foretag) return; rows.push(Object.assign({_datum:x.datum,_plats:x.plats,_platsNamn:x.platsNamn,_day:d.id},e)); }); });
+    rows.sort((a,b)=>a.in<b.in?-1:1);
+    R.rows=rows; drawReport();
+  }catch(e){ console.error(e); if(out) out.innerHTML='<div class="empty">Kunde inte hämta rapporten. Försök igen.</div>'; }
+}
+function drawReport(){
+  const R=S.rapport, out=$("#rOut"); if(!out) return;
+  const rows=R.rows||[];
+  if(!rows.length){ out.innerHTML='<div class="empty">Inga registreringar för perioden.</div>'; return; }
+  const sum={};
+  rows.forEach(e=>{ const s=sum[e.foretagId]=sum[e.foretagId]||{namn:e.foretagNamn, pers:new Set(), pass:0, min:0, man:0, open:0, dagar:{}};
+    s.pers.add(e.personId); s.pass++; if(e.ut){ const m=mins(e.in,e.ut); s.min+=m; s.dagar[e._datum]=(s.dagar[e._datum]||0)+m; } else s.open++; if(e.inManuell||e.utManuell) s.man++; if(e.tidig) s.tidig=(s.tidig||0)+1; });
+  const list=Object.entries(sum).sort((a,b)=>b[1].min-a[1].min);
+  const tot=list.reduce((t,[,s])=>({pass:t.pass+s.pass,min:t.min+s.min}),{pass:0,min:0});
+  let h='<div class="card"><h3>Summering per UE</h3><p class="small muted" style="margin:0">Fyll i timmarna UE:n har rapporterat eller fakturerat för perioden för att se avvikelsen mot stämplingarna.</p></div>';
+  h+='<div class="tablewrap"><table><thead><tr><th>UE-företag</th><th class="num">Pers.-pass</th><th class="num">Stämplat h</th><th class="num">UE uppger h</th><th class="num">Avvikelse</th><th>Flaggor</th></tr></thead><tbody>';
+  list.forEach(([id,s])=>{ const f=R.fakt[id]; const fv=f!=null&&f!==""?parseFloat(String(f).replace(",",".")):null; const diff=fv!=null&&!isNaN(fv)?fv-s.min/60:null;
+    h+='<tr><td>'+esc(s.namn)+'</td><td class="num">'+s.pass+'</td><td class="num">'+fmtH(s.min)+'</td><td class="num"><input class="i" style="width:90px;min-height:34px;padding:4px 8px;text-align:right" inputmode="decimal" data-fakt="'+esc(id)+'" value="'+esc(f??"")+'" aria-label="UE uppger timmar för '+esc(s.namn)+'"></td><td class="num '+(diff==null?'':(diff>0.25?'diff-pos':'diff-ok'))+'">'+(diff==null?'–':(diff>0?'+':'')+diff.toLocaleString("sv-SE",{maximumFractionDigits:2})+' h')+'</td><td>'+(s.open?'<span class="pill bad">'+s.open+' ej ut</span> ':'')+(s.man?'<span class="pill warn">'+s.man+' manuell</span> ':'')+(s.tidig?'<span class="pill warn">'+s.tidig+' gick tidigare</span>':'')+(!s.open&&!s.man&&!s.tidig?'<span class="pill ok">ok</span>':'')+'</td></tr>'; });
+  h+='</tbody><tfoot><tr><td>Totalt</td><td class="num">'+tot.pass+'</td><td class="num">'+fmtH(tot.min)+'</td><td></td><td></td><td></td></tr></tfoot></table></div>';
+  // per day matrix
+  const days=[...new Set(rows.map(r=>r._datum))].sort();
+  h+='<div class="card"><h3>Timmar per dag</h3></div><div class="tablewrap"><table><thead><tr><th>UE-företag</th>'+days.map(d=>{const x=new Date(d+"T12:00");return '<th class="num">'+WD[x.getDay()]+' '+x.getDate()+'/'+(x.getMonth()+1)+'</th>';}).join("")+'</tr></thead><tbody>'+list.map(([,s])=>'<tr><td>'+esc(s.namn)+'</td>'+days.map(d=>'<td class="num">'+(s.dagar[d]?fmtH(s.dagar[d]):'')+'</td>').join("")+'</tr>').join("")+'</tbody></table></div>';
+  // detail
+  h+='<div class="card"><div class="row"><h3 class="grow">Alla pass ('+rows.length+')</h3></div><button class="btn primary big" type="button" id="send">Skicka rapport (fil)</button><div class="grid2"><button class="btn" type="button" id="mail">Mail med sammanfattning</button><button class="btn" type="button" id="csv">Spara CSV</button></div><button class="btn sm ghost" type="button" id="cpy">Kopiera till Excel</button><p class="small muted" style="margin:0">Rast ingår i tiden. Mottagare: '+(store.get("mottagare","")?esc(store.get("mottagare","")):'<b>ej angiven</b> (ställ in under Inställningar)')+'</p></div>';
+  h+='<div class="tablewrap"><table><thead><tr><th>Datum</th><th>Plats</th><th>UE</th><th>Namn</th><th>ID06</th><th class="num">In</th><th class="num">Ut</th><th class="num">Timmar</th><th>Anm.</th><th>Registrerad av</th></tr></thead><tbody>'+rows.map(e=>'<tr><td class="mono">'+e._datum+'</td><td>'+esc(e._platsNamn||"")+'</td><td>'+esc(e.foretagNamn)+'</td><td>'+(e.namn?esc(e.namn):'<span class="muted">–</span>')+'</td><td>'+esc(e.id06||"")+'</td><td class="num">'+hm(e.in)+'</td><td class="num">'+(e.ut?hm(e.ut)+(dateKey(new Date(e.ut))!==e._datum?' (+1)':''):'<span class="pill bad">ej ut</span>')+'</td><td class="num">'+(e.ut?fmtH(mins(e.in,e.ut)):'')+'</td><td>'+anm(e)+'</td><td><span data-name="'+esc(e.inAv||"")+'"></span></td></tr>').join("")+'</tbody></table></div>';
+  out.innerHTML=h;
+  out.querySelectorAll("[data-fakt]").forEach(i=>i.onchange=()=>{ R.fakt[i.dataset.fakt]=i.value; drawReport(); });
+  $("#csv").onclick=exportCsv; $("#cpy").onclick=copyTsv;
+  $("#send").onclick=sendReport; $("#mail").onclick=mailSummary;
+  resolveNames();
+}
+function anm(e){ const a=[]; if(e.inManuell) a.push('<span class="pill warn" title="'+esc(e.inOrsak)+'">manuell in</span>'); if(e.utManuell) a.push('<span class="pill warn" title="'+esc(e.utOrsak)+'">manuell ut</span>'); if(e.tidig) a.push('<span class="pill warn">gick tidigare</span>'); if(e.utNotering&&e.utNotering!==e.utOrsak) a.push('<span class="small">'+esc(e.utNotering)+'</span>'); else if(e.utManuell) a.push('<span class="small">'+esc(e.utOrsak)+'</span>'); return a.join(" "); }
+function anmTxt(e){ const a=[]; if(e.inManuell) a.push("Manuell in: "+e.inOrsak); if(e.utManuell) a.push("Manuell ut: "+e.utOrsak); if(e.tidig) a.push("Gick tidigare"); if(e.utNotering&&e.utNotering!==e.utOrsak) a.push("Notering: "+e.utNotering); if(!e.ut) a.push("Ej utstämplad"); return a.join(" | "); }
+function tableRows(){
+  return [["Datum","Plats","UE-företag","Namn","ID06","In","Ut","Timmar","Anmärkning","Registrerad av","Registrerad tid in"]].concat((S.rapport.rows||[]).map(e=>[e._datum,e._platsNamn||"",e.foretagNamn,e.namn,e.id06||"",hm(e.in),e.ut?(dateKey(new Date(e.ut))+" "+hm(e.ut)):"",e.ut?fmtH(mins(e.in,e.ut)):"",anmTxt(e),S.names[e.inAv]||"",e.inReg?dateKey(new Date(e.inReg))+" "+hm(e.inReg):""]));
+}
+function buildCsv(){ return "\ufeff"+tableRows().map(r=>r.map(c=>{ c=String(c); return /[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c; }).join(";")).join("\r\n"); }
+function reportName(){ const R=S.rapport; const pl=R.plats==="alla"?"alla-platser":slug((S.platser[R.plats]||{}).namn||R.plats); return "UE-narvaro_"+pl+"_"+R.from+"_"+R.to+"_"+slug(S.me||"arbetsledare")+".csv"; }
+function reportSubject(){ const R=S.rapport; const pl=R.plats==="alla"?"alla platser":((S.platser[R.plats]||{}).namn||R.plats); return "UE-närvaro "+pl+" "+R.from+" – "+R.to+" ("+(S.me||"arbetsledare")+")"; }
+function summaryText(){
+  const R=S.rapport, rows=R.rows||[]; const L=[];
+  L.push(reportSubject()); L.push("Arbetsledare: "+(S.me||"–")); L.push("Rast ingår i tiden."); L.push("");
+  const by={}; rows.forEach(e=>{ (by[e.foretagNamn]=by[e.foretagNamn]||[]).push(e); });
+  let tot=0;
+  Object.keys(by).sort((a,b)=>a.localeCompare(b,"sv")).forEach(co=>{
+    const l=by[co]; const m=l.filter(e=>e.ut).reduce((s,e)=>s+mins(e.in,e.ut),0); tot+=m;
+    L.push(co+": "+fmtH(m)+" h ("+l.length+" pers.-pass)");
+    const days={}; l.forEach(e=>(days[e._datum]=days[e._datum]||[]).push(e));
+    Object.keys(days).sort().forEach(d=>{ const dl=days[d]; const dm=dl.filter(e=>e.ut).reduce((s,e)=>s+mins(e.in,e.ut),0); const x=new Date(d+"T12:00");
+      L.push("  "+WD[x.getDay()]+" "+x.getDate()+"/"+(x.getMonth()+1)+": "+dl.length+" pers, "+fmtH(dm)+" h");
+      dl.filter(e=>e.tidig).forEach(e=>L.push("    Gick tidigare "+hm(e.ut)+": "+(e.namn||"namn ej angivet")+(e.utNotering?" – "+e.utNotering:"")));
+      const open=dl.filter(e=>!e.ut).length; if(open) L.push("    OBS: "+open+" ej utstämplade");
+      const man=dl.filter(e=>e.inManuell||e.utManuell).length; if(man) L.push("    "+man+" med manuell tid");
+    });
+    L.push("");
+  });
+  L.push("Totalt: "+fmtH(tot)+" h");
+  return L.join("\n");
+}
+async function sendReport(){
+  if(!(S.rapport.rows||[]).length){ toast("Rapporten är tom."); return; }
+  const csv=buildCsv(), name=reportName();
+  let file=null; try{ file=new File([csv], name, {type:"text/csv"}); }catch(e){}
+  if(file && navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title:reportSubject(), text:summaryText()}); return; }
+    catch(e){ if(e && e.name==="AbortError") return; }
+  }
+  downloadBlob(csv, name, "text/csv;charset=utf-8");
+  toast("Filen sparades i Hämtade filer. Bifoga den i mailet.");
+  setTimeout(mailSummary, 800);
+}
+function mailSummary(){
+  if(!(S.rapport.rows||[]).length){ toast("Rapporten är tom."); return; }
+  const to=store.get("mottagare","");
+  location.href="mailto:"+to+"?subject="+encodeURIComponent(reportSubject())+"&body="+encodeURIComponent(summaryText());
+}
+function exportCsv(){ downloadBlob(buildCsv(), reportName(), "text/csv;charset=utf-8"); toast("CSV sparad i Hämtade filer."); }
+async function copyTsv(){
+  const tsv=tableRows().map(r=>r.map(c=>String(c).replace(/[\t\n]/g," ")).join("\t")).join("\n");
+  try{ await navigator.clipboard.writeText(tsv); toast("Kopierat. Klistra in i Excel."); }catch(e){ toast("Kopiering stöds inte här. Använd Spara CSV."); }
+}
+
+/* ----- Register (inställningar) ----- */
+const openCo={};
+function renderInst(){
+  const v=$("#view-inst");
+  if(!S.loaded.platser||!S.loaded.foretag){ v.innerHTML=loadingOr(""); return; }
+  const pls=Object.entries(S.platser).sort((a,b)=>a[1].namn.localeCompare(b[1].namn,"sv"));
+  const cos=Object.entries(S.foretag).sort((a,b)=>a[1].namn.localeCompare(b[1].namn,"sv"));
+  const used=LDB.size(), bk=store.get("senastBackup",null);
+  let h='<h2>Inställningar</h2><div class="card'+(S.me?'':' note')+'"><label class="f">Ditt namn (arbetsledare)<input class="i" id="stNamn" value="'+esc(S.me)+'" placeholder="För- och efternamn" autocomplete="name"></label><label class="f">Skicka rapporter till (e-post)<input class="i" id="stMail" type="email" value="'+esc(store.get("mottagare",""))+'" placeholder="t.ex. projektingenjor@esi.se" autocomplete="email"></label><button class="btn primary" type="button" id="stSave">Spara inställningar</button></div>';
+  h+='<div class="card"><h3>Data i telefonen</h3><p class="small" style="margin:0">Allt sparas bara i den här telefonen, ingen internetuppkoppling behövs. Rensar man webbläsarens data försvinner registreringarna, så skicka rapporter löpande och ta säkerhetskopia ibland.</p><p class="small muted" style="margin:0">Använt: '+Math.round(used/1024)+' kB av ca 5 000 kB · Senaste säkerhetskopia: '+(bk?dShort(bk)+' '+hm(bk):'aldrig')+'</p><div class="grid2"><button class="btn" type="button" id="bkOut">Ta säkerhetskopia</button><label class="btn" for="bkIn">Återställ från fil</label></div><input type="file" id="bkIn" accept=".json,application/json" class="hidden"></div>';
+  h+='<h2>Arbetsplatser</h2><div class="card">'+(pls.length?pls.map(([id,p])=>'<div class="person"><div class="grow"><div class="nm">'+esc(p.namn)+(p.aktiv===false?' <span class="pill warn">inaktiv</span>':'')+'</div></div><button class="btn sm" type="button" data-tgp="'+esc(id)+'">'+(p.aktiv===false?'Aktivera':'Inaktivera')+'</button></div>').join(""):'<div class="muted small">Inga arbetsplatser än.</div>')+'<div class="row"><input class="i grow" id="nyPlats" placeholder="T.ex. Kungsträdgården BGP"><button class="btn primary" type="button" id="addPlats">Lägg till</button></div></div>';
+  h+='<h2>UE-företag</h2>';
+  if(!cos.length) h+='<div class="empty">Inga UE-företag än. De kan också läggas upp direkt vid instämpling.</div>';
+  cos.forEach(([id,c])=>{ const pers=Object.entries(c.personer||{}).sort((a,b)=>a[1].namn.localeCompare(b[1].namn,"sv"));
+    h+='<details class="card" data-co-d="'+esc(id)+'"'+(openCo[id]?' open':'')+'><summary><span>'+esc(c.namn)+(c.aktiv===false?' <span class="pill warn">inaktiv</span>':'')+'</span><span class="muted small">'+(c.orgnr?'':'visa')+'</span></summary>'+(c.orgnr?'<div class="small muted">Org.nr '+esc(c.orgnr)+'</div>':'')+
+      '<div class="row" style="flex-wrap:wrap"><button class="btn sm" type="button" data-edco="'+esc(id)+'">Ändra namn/org.nr</button><button class="btn sm" type="button" data-tgco="'+esc(id)+'">'+(c.aktiv===false?'Aktivera':'Inaktivera')+'</button></div></details>'; });
+  h+='<button class="btn" type="button" id="newCo2">+ Nytt UE-företag</button>';
+  h+='<div class="card note"><h3>Så fungerar spårbarheten</h3><p class="small" style="margin:0">Varje stämpling sparar klockslaget när knappen trycktes och vilken arbetsledare som tryckte. Manuellt angivna eller ändrade tider kräver orsak, markeras i rapporten och syns i ändringsloggen. Borttagna rader döljs men raderas aldrig.</p></div>';
+  v.innerHTML=h;
+  const addP=async ()=>{ if(!guard())return; const n=$("#nyPlats").value.trim(); if(!n) return; const id=slug(n); if(S.platser[id]){toast("Platsen finns redan.");return;}
+    try{ await S.db.doc("platser/"+id).set({namn:n, aktiv:true, skapad:new Date().toISOString(), skapadAv:S.me}); if(!S.platsId){S.platsId=id; store.set("plats",id);} toast("Arbetsplats tillagd."); }catch(e){ writeErr(e); } };
+  $("#addPlats").onclick=addP; $("#nyPlats").addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();addP();} });
+  v.querySelectorAll("[data-tgp]").forEach(b=>b.onclick=async ()=>{ if(!guard())return; const p=S.platser[b.dataset.tgp]; try{ await S.db.doc("platser/"+b.dataset.tgp).update({aktiv:p.aktiv===false}); }catch(e){writeErr(e);} });
+  v.querySelectorAll("[data-tgco]").forEach(b=>b.onclick=async ()=>{ if(!guard())return; const c=S.foretag[b.dataset.tgco]; try{ await S.db.doc("foretag/"+b.dataset.tgco).update({aktiv:c.aktiv===false}); }catch(e){writeErr(e);} });
+  v.querySelectorAll("[data-tgper]").forEach(b=>b.onclick=async ()=>{ if(!guard())return; const [cid,pid]=b.dataset.tgper.split("|"); const p=S.foretag[cid].personer[pid]; try{ await S.db.doc("foretag/"+cid).update({personer:{[pid]:{inaktiv:!p.inaktiv}}}); }catch(e){writeErr(e);} });
+  v.querySelectorAll("[data-edco]").forEach(b=>b.onclick=()=>coSheet(b.dataset.edco));
+  v.querySelectorAll("[data-addper]").forEach(b=>b.onclick=async ()=>{ if(!guard())return; const cid=b.dataset.addper;
+    const nIn=document.getElementById("np-"+cid), iIn=document.getElementById("ni-"+cid); const n=nIn.value.trim(); if(!n){ toast("Skriv ett namn."); nIn.focus(); return; }
+    const pid=slug(n)+"-"+uid().slice(-4); openCo[cid]=true;
+    try{ await S.db.doc("foretag/"+cid).update({personer:{[pid]:{namn:n, id06:iIn.value.trim()}}}); toast(n+" tillagd i "+S.foretag[cid].namn+"."); }catch(e){ writeErr(e); } });
+  v.querySelectorAll("details[data-co-d]").forEach(d=>d.addEventListener("toggle",()=>{ openCo[d.dataset.coD]=d.open; }));
+  $("#newCo2").onclick=()=>coSheet();
+  $("#stSave").onclick=()=>{ const n=$("#stNamn").value.trim(), m=$("#stMail").value.trim(); if(!n){ toast("Ange ditt namn."); return; } S.me=n; store.set("ledare",n); store.set("mottagare",m); toast("Inställningarna är sparade."); render(); };
+  $("#bkOut").onclick=()=>{ const d={app:"ue-stampelklocka", version:1, exporterad:new Date().toISOString(), arbetsledare:S.me, data:LDB.exportAll()}; downloadBlob(JSON.stringify(d), "UE-klocka_backup_"+dateKey(new Date())+"_"+slug(S.me||"ledare")+".json", "application/json"); store.set("senastBackup", new Date().toISOString()); toast("Säkerhetskopian sparades i Hämtade filer."); };
+  $("#bkIn").onchange=async ev=>{ const f=ev.target.files[0]; if(!f) return; try{ const d=JSON.parse(await f.text()); if(!d||d.app!=="ue-stampelklocka"||!d.data) throw new Error("fel fil");
+      openSheet('<h2>Återställ säkerhetskopia?</h2><p style="margin:0">Filen är från '+esc(d.arbetsledare||"okänd")+', '+dShort(d.exporterad)+' '+hm(d.exporterad)+'. All nuvarande data i telefonen ersätts.</p><div class="grid2"><button class="btn" type="button" data-close>Avbryt</button><button class="btn danger" type="button" id="bkOk">Ersätt data</button></div>', r=>{ r.querySelector("#bkOk").onclick=()=>{ LDB.importAll(d.data); closeSheet(); toast("Data återställd."); }; });
+    }catch(e){ toast("Filen kunde inte läsas som säkerhetskopia."); } ev.target.value=""; };
+}
+
+/* ---------- names ---------- */
+function resolveNames(){ document.querySelectorAll("[data-name]").forEach(el=>{ const id=el.dataset.name; el.textContent = id ? (id===S.me?"du":id) : ""; }); }
+
+/* ---------- boot ---------- */
+S.db=LDB; S.me=store.get("ledare",""); S.canWrite=true;
+try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+(async function boot(){
+  if(!Object.keys(LDB.exportAll().platser||{}).length && !store.get("seeded",false)){
+    for(const n of ["Kungsträdgården","Akalla","Hallonbergen"]) await LDB.doc("platser/"+slug(n)).set({namn:n, aktiv:true, skapad:new Date().toISOString(), skapadAv:""});
+    store.set("seeded",true);
+  }
+  LDB.collection("platser").onSnapshot(s=>{ const o={}; s.docs.forEach(d=>o[d.id]=d.data()); S.platser=o; S.loaded.platser=true; if(!S.platsId){ const ids=Object.keys(o).filter(k=>o[k].aktiv!==false); if(ids.length===1){S.platsId=ids[0];store.set("plats",S.platsId);} } safeRender(); });
+  LDB.collection("foretag").onSnapshot(s=>{ const o={}; s.docs.forEach(d=>o[d.id]=d.data()); S.foretag=o; S.loaded.foretag=true; safeRender(); });
+  const since=new Date(); since.setDate(since.getDate()-7);
+  LDB.collection("dagar").where("datum",">=",dateKey(since)).onSnapshot(s=>{ const o={}; s.docs.forEach(d=>o[d.id]=d.data()); S.dagar=o; S.loaded.dagar=true; safeRender(); });
+  if(!S.me) setTimeout(()=>setTab("inst"),50);
+})();
+let rq=null;
+function safeRender(){ if(rq) return; rq=setTimeout(()=>{ rq=null; const ae=document.activeElement; if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&S.tab!=="plats"&&!ae.closest(".sheet")){ ae.addEventListener("blur",()=>setTimeout(safeRender,0),{once:true}); return; } render(); },0); }
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{})); }
+})();
+</script>
+</body>
+</html>
